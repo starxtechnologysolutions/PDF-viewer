@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import * as pdfjsLib from 'pdfjs-dist'
-import { PDFDocument, rgb } from 'pdf-lib'
 
 // Set up PDF.js worker to use a local worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
@@ -78,76 +77,22 @@ const usePdfStore = create((set, get) => ({
         })
       }
       
-      // Now load with pdf-lib for form field editing
-      let pdfDoc, form, fields
-      try {
-        pdfDoc = await PDFDocument.load(pdfBytes)
-        form = pdfDoc.getForm()
-        fields = form.getFields()
-      } catch (pdfLibError) {
-        console.warn('PDF-lib failed to load, using PDF.js fields only:', pdfLibError)
-        // If PDF-lib fails, we'll use the fields from PDF.js
-        fields = []
-      }
-      
-      // Parse form fields and their properties
-      let formFields = []
-      
-      if (fields && fields.length > 0) {
-        // Use PDF-lib fields if available
-        formFields = fields.map((field, index) => {
-          const fieldType = field.constructor.name
-          const fieldName = field.getName() || `field_${index + 1}`
-          
-          // Try to find matching field from PDF.js for better positioning
-          let bounds = {
-            x: 100 + (index * 50),
-            y: 100 + (index * 30),
-            width: 150,
-            height: 20
-          }
-          
-                  const matchingField = pdfJsFields.find(f => f.name === fieldName)
-        if (matchingField) {
-          // PDF.js coordinates are in PDF points (1/72 inch)
-          // We need to convert them to the canvas coordinate system
-          bounds = {
-            x: matchingField.bounds[0],
-            y: matchingField.bounds[1],
-            width: matchingField.bounds[2] - matchingField.bounds[0],
-            height: matchingField.bounds[3] - matchingField.bounds[1]
-          }
-        }
-          
-          return {
-            id: index,
-            name: fieldName,
-            type: fieldType,
-            bounds,
-            originalName: fieldName,
-            field: field, // Reference to the actual field object
-            page: matchingField?.page || 1,
-            viewport: matchingField?.viewport
-          }
-        })
-      } else {
-        // Use PDF.js fields if PDF-lib failed
-        formFields = pdfJsFields.map((field, index) => ({
-          id: index,
-          name: field.name,
-          type: field.type,
-          bounds: {
-            x: field.bounds[0],
-            y: field.bounds[1],
-            width: field.bounds[2] - field.bounds[0],
-            height: field.bounds[3] - field.bounds[1]
-          },
-          originalName: field.name,
-          field: null, // No PDF-lib field reference
-          page: field.page,
-          viewport: field.viewport
-        }))
-      }
+      // Use PDF.js fields for form field information
+      const formFields = pdfJsFields.map((field, index) => ({
+        id: index,
+        name: field.name,
+        type: field.type,
+        bounds: {
+          x: field.bounds[0],
+          y: field.bounds[1],
+          width: field.bounds[2] - field.bounds[0],
+          height: field.bounds[3] - field.bounds[1]
+        },
+        originalName: field.name,
+        field: null, // No PDF-lib field reference
+        page: field.page,
+        viewport: field.viewport
+      }))
       
       console.log('Form fields loaded:', formFields)
       set({
