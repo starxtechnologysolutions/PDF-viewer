@@ -197,10 +197,10 @@ const FieldEditor = () => {
         <div className="text-xs text-gray-500">
           <p>• Click on a field in the PDF to select it</p>
           <p>• Use the edit button to rename fields</p>
-          <p>• Save the PDF to download with updated names</p>
+          <p>• Save to download PDF and field changes summary</p>
           {formFields.some(field => field.name !== field.originalName) && (
-            <p className="text-green-600 mt-2">
-              ✓ Field name changes will be saved to the downloaded PDF
+            <p className="text-blue-600 mt-2">
+              📋 Field name changes will be included in a summary file
             </p>
           )}
         </div>

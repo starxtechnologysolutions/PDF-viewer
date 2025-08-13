@@ -291,60 +291,14 @@ const usePdfStore = create((set, get) => ({
     }
   },
   
-  // Helper function to create a new PDF with field name annotations
+  // Helper function to create a summary of field changes and download original PDF
   createNewPdfWithAnnotations: async (originalPdfBytes, formFields) => {
     try {
-      // Create a new PDF document
-      const pdfDoc = await PDFDocument.create()
+      // Get the list of changed fields
+      const changedFields = formFields.filter(field => field.name !== field.originalName)
       
-      // Load the original PDF as a page
-      const originalPdf = await PDFDocument.load(originalPdfBytes)
-      const pages = await pdfDoc.copyPages(originalPdf, originalPdf.getPageIndices())
-      
-      // Add all pages to the new document
-      pages.forEach(page => pdfDoc.addPage(page))
-      
-      // Add text annotations for field names
-      const form = pdfDoc.getForm()
-      let annotationCount = 0
-      
-      formFields.forEach((field, index) => {
-        if (field.name !== field.originalName) {
-          try {
-            // Create a text field annotation with the new name
-            const textField = form.createTextField(`field_${index}_${field.name}`)
-            textField.setText(field.name)
-            textField.addToPage(pdfDoc.getPage(field.page - 1), {
-              x: field.bounds.x,
-              y: field.bounds.y,
-              width: field.bounds.width,
-              height: field.bounds.height
-            })
-            annotationCount++
-          } catch (error) {
-            console.warn(`Could not create annotation for field ${field.name}:`, error)
-          }
-        }
-      })
-      
-      if (annotationCount > 0) {
-        // Generate the new PDF
-        const newPdfBytes = await pdfDoc.save()
-        
-        // Create download link
-        const blob = new Blob([newPdfBytes], { type: 'application/pdf' })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = 'updated-form-with-annotations.pdf'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-        
-        alert(`Created new PDF with ${annotationCount} field name annotations!`)
-      } else {
-        // Fallback to original PDF
+      if (changedFields.length === 0) {
+        // No changes, download original
         const blob = new Blob([originalPdfBytes], { type: 'application/pdf' })
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
@@ -355,12 +309,28 @@ const usePdfStore = create((set, get) => ({
         document.body.removeChild(link)
         URL.revokeObjectURL(url)
         
-        alert('Could not create field annotations. Original PDF downloaded.')
+        alert('No field changes detected. Original PDF downloaded.')
+        return
       }
       
-    } catch (error) {
-      console.error('Error creating new PDF with annotations:', error)
-      // Fallback to original PDF if annotation creation fails
+      // Create a summary of changes
+      const summary = changedFields.map(field => 
+        `• ${field.originalName} → ${field.name} (${field.type})`
+      ).join('\n')
+      
+      // Create a text file with the changes summary
+      const summaryText = `Field Name Changes Summary\n\n${summary}\n\nNote: The original PDF has been downloaded. Please manually update the field names in your PDF editor using this summary.`
+      const summaryBlob = new Blob([summaryText], { type: 'text/plain' })
+      const summaryUrl = URL.createObjectURL(summaryBlob)
+      const summaryLink = document.createElement('a')
+      summaryLink.href = summaryUrl
+      summaryLink.download = 'field-changes-summary.txt'
+      document.body.appendChild(summaryLink)
+      summaryLink.click()
+      document.body.removeChild(summaryLink)
+      URL.revokeObjectURL(summaryUrl)
+      
+      // Download the original PDF
       const blob = new Blob([originalPdfBytes], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -371,7 +341,22 @@ const usePdfStore = create((set, get) => ({
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
       
-      alert('Failed to create annotations. Original PDF downloaded instead.')
+      alert(`Downloaded original PDF and field changes summary (${changedFields.length} changes). Please use the summary to manually update your PDF.`)
+      
+    } catch (error) {
+      console.error('Error creating summary:', error)
+      // Fallback to original PDF if summary creation fails
+      const blob = new Blob([originalPdfBytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'original-form.pdf'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      
+      alert('Failed to create summary. Original PDF downloaded instead.')
     }
   },
   
