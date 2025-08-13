@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # PDF Viewer & Form Field Editor
 
 A web-based PDF viewer and form field editor built with React, allowing users to view PDFs, detect form fields, edit field names, and export updated PDFs.
@@ -171,3 +172,7 @@ MIT License - see LICENSE file for details.
 - [PDF-lib](https://pdf-lib.js.org/) - PDF manipulation library
 - [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
 - [Lucide React](https://lucide.dev/) - Beautiful icons
+=======
+# PDF-viewer
+PDF 
+>>>>>>> 36574103deadce5bfb693fc1ba5f69992016c382
