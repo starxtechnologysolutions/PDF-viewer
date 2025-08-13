@@ -291,7 +291,7 @@ const usePdfStore = create((set, get) => ({
     }
   },
   
-  // Helper function to create a new PDF with field name annotations
+  // Helper function to modify existing PDF form fields
   createNewPdfWithAnnotations: async (originalPdfBytes, formFields) => {
     try {
       // Get the list of changed fields
@@ -313,107 +313,109 @@ const usePdfStore = create((set, get) => ({
         return
       }
 
-      // Try to create a new PDF with annotations
+      // Try to modify the existing PDF directly
       try {
-        console.log('Attempting to create PDF with annotations...')
-        
-        // Create a new PDF document
-        const pdfDoc = await PDFDocument.create()
-        console.log('Created new PDF document')
+        console.log('Attempting to modify existing PDF form fields...')
         
         // Load the original PDF
         console.log('Loading original PDF...')
-        const originalPdf = await PDFDocument.load(originalPdfBytes)
+        const pdfDoc = await PDFDocument.load(originalPdfBytes)
         console.log('Original PDF loaded successfully')
         
-        const pages = await pdfDoc.copyPages(originalPdf, originalPdf.getPageIndices())
-        console.log(`Copied ${pages.length} pages from original PDF`)
-        
-        // Add all pages to the new document
-        pages.forEach(page => pdfDoc.addPage(page))
-        console.log('Added all pages to new document')
-        
-        // Add text annotations for field names
+        // Get the form
         const form = pdfDoc.getForm()
-        let annotationCount = 0
+        console.log('Form accessed successfully')
         
-        console.log(`Attempting to create annotations for ${changedFields.length} changed fields...`)
+        // Get all form fields
+        const fields = form.getFields()
+        console.log(`Found ${fields.length} form fields in PDF`)
         
-        changedFields.forEach((field, index) => {
+        let modifiedCount = 0
+        
+        // Try to modify existing fields
+        changedFields.forEach((changedField) => {
           try {
-            console.log(`Creating annotation for field: ${field.originalName} → ${field.name}`)
-            console.log(`Field bounds:`, field.bounds)
-            console.log(`Field page: ${field.page}`)
+            console.log(`Looking for field: ${changedField.originalName}`)
             
-            // Create a text field annotation with the new name
-            const textField = form.createTextField(`field_${index}_${field.name}`)
-            textField.setText(field.name)
+            // Find the field by its original name
+            const existingField = fields.find(field => 
+              field.getName() === changedField.originalName ||
+              field.getName() === changedField.name
+            )
             
-            const targetPage = pdfDoc.getPage(field.page - 1)
-            console.log(`Target page index: ${field.page - 1}, page exists:`, !!targetPage)
-            
-            textField.addToPage(targetPage, {
-              x: field.bounds.x,
-              y: field.bounds.y,
-              width: field.bounds.width,
-              height: field.bounds.height
-            })
-            annotationCount++
-            console.log(`Successfully created annotation for field ${field.name}`)
-          } catch (error) {
-            console.error(`Could not create annotation for field ${field.name}:`, error)
+            if (existingField) {
+              console.log(`Found existing field: ${existingField.getName()}`)
+              
+              // Try to rename the field
+              try {
+                // For text fields, we can set the name
+                if (existingField.constructor.name === 'PDFTextField') {
+                  existingField.setName(changedField.name)
+                  console.log(`Renamed field from ${changedField.originalName} to ${changedField.name}`)
+                  modifiedCount++
+                } else {
+                  console.log(`Field ${existingField.getName()} is not a text field, cannot rename`)
+                }
+              } catch (renameError) {
+                console.warn(`Could not rename field ${changedField.originalName}:`, renameError)
+              }
+            } else {
+              console.log(`Field ${changedField.originalName} not found in PDF`)
+            }
+          } catch (fieldError) {
+            console.error(`Error processing field ${changedField.originalName}:`, fieldError)
           }
         })
         
-        console.log(`Created ${annotationCount} annotations successfully`)
+        console.log(`Modified ${modifiedCount} fields successfully`)
         
-        if (annotationCount > 0) {
-          // Generate the new PDF
-          console.log('Generating new PDF...')
-          const newPdfBytes = await pdfDoc.save()
-          console.log('New PDF generated successfully')
+        if (modifiedCount > 0) {
+          // Save the modified PDF
+          console.log('Saving modified PDF...')
+          const modifiedPdfBytes = await pdfDoc.save()
+          console.log('Modified PDF saved successfully')
           
           // Create download link
-          const blob = new Blob([newPdfBytes], { type: 'application/pdf' })
+          const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
           const url = URL.createObjectURL(blob)
           const link = document.createElement('a')
           link.href = url
-          link.download = 'updated-form-with-annotations.pdf'
+          link.download = 'updated-form-fields.pdf'
           document.body.appendChild(link)
           link.click()
           document.body.removeChild(link)
           URL.revokeObjectURL(url)
           
-          alert(`Successfully created PDF with ${annotationCount} field name annotations!`)
+          alert(`Successfully modified ${modifiedCount} field names in the PDF!`)
           return
         } else {
-          console.log('No annotations were created, trying alternative approach...')
+          console.log('No fields were modified, trying alternative approach...')
           
-          // Alternative approach: Create a new PDF with text overlays
+          // Alternative approach: Create a new PDF with the original content and new field names
           try {
-            console.log('Creating new PDF with text overlays...')
+            console.log('Creating new PDF with modified field names...')
             const newPdfDoc = await PDFDocument.create()
             
-            // Add a blank page
-            const page = newPdfDoc.addPage([612, 792]) // Standard letter size
+            // Copy pages from original
+            const pages = await newPdfDoc.copyPages(pdfDoc, pdfDoc.getPageIndices())
+            pages.forEach(page => newPdfDoc.addPage(page))
             
-            // Add text for each changed field
+            // Add new form fields with the updated names
+            const newForm = newPdfDoc.getForm()
+            
             changedFields.forEach((field, index) => {
-              const text = `${field.originalName} → ${field.name}`
-              page.drawText(text, {
-                x: 50,
-                y: 750 - (index * 30), // Stack text vertically
-                size: 12,
-                color: rgb(0, 0, 0)
-              })
-            })
-            
-            // Add title
-            page.drawText('Field Name Changes Summary', {
-              x: 50,
-              y: 780,
-              size: 16,
-              color: rgb(0, 0, 0)
+              try {
+                const textField = newForm.createTextField(field.name)
+                textField.addToPage(newPdfDoc.getPage(field.page - 1), {
+                  x: field.bounds.x,
+                  y: field.bounds.y,
+                  width: field.bounds.width,
+                  height: field.bounds.height
+                })
+                console.log(`Added new field: ${field.name}`)
+              } catch (error) {
+                console.warn(`Could not add field ${field.name}:`, error)
+              }
             })
             
             const newPdfBytes = await newPdfDoc.save()
@@ -423,20 +425,20 @@ const usePdfStore = create((set, get) => ({
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
-            link.download = 'field-changes-summary.pdf'
+            link.download = 'updated-form-with-new-fields.pdf'
             document.body.appendChild(link)
             link.click()
             document.body.removeChild(link)
             URL.revokeObjectURL(url)
             
-            alert(`Created field changes summary PDF with ${changedFields.length} changes!`)
+            alert(`Created new PDF with updated field names!`)
             return
           } catch (altError) {
             console.error('Alternative PDF creation also failed:', altError)
           }
         }
       } catch (pdfError) {
-        console.error('PDF annotation creation failed, falling back to summary:', pdfError)
+        console.error('PDF modification failed, falling back to summary:', pdfError)
       }
       
       // Fallback: Create a summary of changes
