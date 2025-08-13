@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import * as pdfjsLib from 'pdfjs-dist'
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, rgb } from 'pdf-lib'
 
 // Set up PDF.js worker to use a local worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
@@ -315,40 +315,63 @@ const usePdfStore = create((set, get) => ({
 
       // Try to create a new PDF with annotations
       try {
+        console.log('Attempting to create PDF with annotations...')
+        
         // Create a new PDF document
         const pdfDoc = await PDFDocument.create()
+        console.log('Created new PDF document')
         
         // Load the original PDF
+        console.log('Loading original PDF...')
         const originalPdf = await PDFDocument.load(originalPdfBytes)
+        console.log('Original PDF loaded successfully')
+        
         const pages = await pdfDoc.copyPages(originalPdf, originalPdf.getPageIndices())
+        console.log(`Copied ${pages.length} pages from original PDF`)
         
         // Add all pages to the new document
         pages.forEach(page => pdfDoc.addPage(page))
+        console.log('Added all pages to new document')
         
         // Add text annotations for field names
         const form = pdfDoc.getForm()
         let annotationCount = 0
         
+        console.log(`Attempting to create annotations for ${changedFields.length} changed fields...`)
+        
         changedFields.forEach((field, index) => {
           try {
+            console.log(`Creating annotation for field: ${field.originalName} → ${field.name}`)
+            console.log(`Field bounds:`, field.bounds)
+            console.log(`Field page: ${field.page}`)
+            
             // Create a text field annotation with the new name
             const textField = form.createTextField(`field_${index}_${field.name}`)
             textField.setText(field.name)
-            textField.addToPage(pdfDoc.getPage(field.page - 1), {
+            
+            const targetPage = pdfDoc.getPage(field.page - 1)
+            console.log(`Target page index: ${field.page - 1}, page exists:`, !!targetPage)
+            
+            textField.addToPage(targetPage, {
               x: field.bounds.x,
               y: field.bounds.y,
               width: field.bounds.width,
               height: field.bounds.height
             })
             annotationCount++
+            console.log(`Successfully created annotation for field ${field.name}`)
           } catch (error) {
-            console.warn(`Could not create annotation for field ${field.name}:`, error)
+            console.error(`Could not create annotation for field ${field.name}:`, error)
           }
         })
         
+        console.log(`Created ${annotationCount} annotations successfully`)
+        
         if (annotationCount > 0) {
           // Generate the new PDF
+          console.log('Generating new PDF...')
           const newPdfBytes = await pdfDoc.save()
+          console.log('New PDF generated successfully')
           
           // Create download link
           const blob = new Blob([newPdfBytes], { type: 'application/pdf' })
@@ -363,9 +386,57 @@ const usePdfStore = create((set, get) => ({
           
           alert(`Successfully created PDF with ${annotationCount} field name annotations!`)
           return
+        } else {
+          console.log('No annotations were created, trying alternative approach...')
+          
+          // Alternative approach: Create a new PDF with text overlays
+          try {
+            console.log('Creating new PDF with text overlays...')
+            const newPdfDoc = await PDFDocument.create()
+            
+            // Add a blank page
+            const page = newPdfDoc.addPage([612, 792]) // Standard letter size
+            
+            // Add text for each changed field
+            changedFields.forEach((field, index) => {
+              const text = `${field.originalName} → ${field.name}`
+              page.drawText(text, {
+                x: 50,
+                y: 750 - (index * 30), // Stack text vertically
+                size: 12,
+                color: rgb(0, 0, 0)
+              })
+            })
+            
+            // Add title
+            page.drawText('Field Name Changes Summary', {
+              x: 50,
+              y: 780,
+              size: 16,
+              color: rgb(0, 0, 0)
+            })
+            
+            const newPdfBytes = await newPdfDoc.save()
+            
+            // Create download link
+            const blob = new Blob([newPdfBytes], { type: 'application/pdf' })
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = 'field-changes-summary.pdf'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+            
+            alert(`Created field changes summary PDF with ${changedFields.length} changes!`)
+            return
+          } catch (altError) {
+            console.error('Alternative PDF creation also failed:', altError)
+          }
         }
       } catch (pdfError) {
-        console.warn('PDF annotation creation failed, falling back to summary:', pdfError)
+        console.error('PDF annotation creation failed, falling back to summary:', pdfError)
       }
       
       // Fallback: Create a summary of changes
