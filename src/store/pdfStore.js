@@ -291,7 +291,7 @@ const usePdfStore = create((set, get) => ({
     }
   },
   
-  // Helper function to create a summary of field changes and download original PDF
+  // Helper function to create a new PDF with field name annotations
   createNewPdfWithAnnotations: async (originalPdfBytes, formFields) => {
     try {
       // Get the list of changed fields
@@ -312,8 +312,63 @@ const usePdfStore = create((set, get) => ({
         alert('No field changes detected. Original PDF downloaded.')
         return
       }
+
+      // Try to create a new PDF with annotations
+      try {
+        // Create a new PDF document
+        const pdfDoc = await PDFDocument.create()
+        
+        // Load the original PDF
+        const originalPdf = await PDFDocument.load(originalPdfBytes)
+        const pages = await pdfDoc.copyPages(originalPdf, originalPdf.getPageIndices())
+        
+        // Add all pages to the new document
+        pages.forEach(page => pdfDoc.addPage(page))
+        
+        // Add text annotations for field names
+        const form = pdfDoc.getForm()
+        let annotationCount = 0
+        
+        changedFields.forEach((field, index) => {
+          try {
+            // Create a text field annotation with the new name
+            const textField = form.createTextField(`field_${index}_${field.name}`)
+            textField.setText(field.name)
+            textField.addToPage(pdfDoc.getPage(field.page - 1), {
+              x: field.bounds.x,
+              y: field.bounds.y,
+              width: field.bounds.width,
+              height: field.bounds.height
+            })
+            annotationCount++
+          } catch (error) {
+            console.warn(`Could not create annotation for field ${field.name}:`, error)
+          }
+        })
+        
+        if (annotationCount > 0) {
+          // Generate the new PDF
+          const newPdfBytes = await pdfDoc.save()
+          
+          // Create download link
+          const blob = new Blob([newPdfBytes], { type: 'application/pdf' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = 'updated-form-with-annotations.pdf'
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+          
+          alert(`Successfully created PDF with ${annotationCount} field name annotations!`)
+          return
+        }
+      } catch (pdfError) {
+        console.warn('PDF annotation creation failed, falling back to summary:', pdfError)
+      }
       
-      // Create a summary of changes
+      // Fallback: Create a summary of changes
       const summary = changedFields.map(field => 
         `• ${field.originalName} → ${field.name} (${field.type})`
       ).join('\n')
