@@ -187,6 +187,13 @@ const usePdfStore = create((set, get) => ({
     try {
       set({ isLoading: true })
       
+      // Validate PDF bytes
+      if (!pdfBytes || pdfBytes.length === 0) {
+        throw new Error('PDF data is not available. Please upload a PDF file first.')
+      }
+      
+      console.log('PDF bytes available:', pdfBytes.length, 'bytes')
+      
       // Check if we have any field name changes
       const hasChanges = formFields.some(field => field.name !== field.originalName)
       
@@ -206,7 +213,7 @@ const usePdfStore = create((set, get) => ({
         return
       }
       
-            // Try to create a new PDF with field name annotations
+      // Try to create a new PDF with field name annotations
       try {
         await get().createNewPdfWithAnnotations(pdfBytes, formFields)
       } catch (error) {
@@ -230,7 +237,7 @@ const usePdfStore = create((set, get) => ({
     } catch (error) {
       console.error('Error saving PDF:', error)
       set({ 
-        error: 'Failed to save PDF. Please try again.',
+        error: error.message || 'Failed to save PDF. Please try again.',
         isLoading: false 
       })
     }
@@ -307,7 +314,9 @@ Note: The original PDF has been downloaded as "original-form.pdf".
 Use this guide to manually update the field names in your PDF editor.`
       
       // Create the guide file
+      console.log('Creating guide file with text:', guideText.length, 'characters')
       const guideBlob = new Blob([guideText], { type: 'text/plain' })
+      console.log('Guide blob size:', guideBlob.size, 'bytes')
       const guideUrl = URL.createObjectURL(guideBlob)
       const guideLink = document.createElement('a')
       guideLink.href = guideUrl
@@ -318,7 +327,13 @@ Use this guide to manually update the field names in your PDF editor.`
       URL.revokeObjectURL(guideUrl)
       
       // Download the original PDF
+      console.log('Original PDF bytes length:', originalPdfBytes?.length || 'undefined')
+      if (!originalPdfBytes || originalPdfBytes.length === 0) {
+        throw new Error('Original PDF bytes are empty or undefined')
+      }
+      
       const blob = new Blob([originalPdfBytes], { type: 'application/pdf' })
+      console.log('PDF blob size:', blob.size, 'bytes')
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
