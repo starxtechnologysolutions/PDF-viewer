@@ -242,12 +242,11 @@ const usePdfStore = create((set, get) => ({
     try {
       set({ isLoading: true })
       
-      // Check if we have PDF-lib fields available for editing
-      const hasPdfLibFields = formFields.some(field => field.field !== null)
+      // Check if we have any field name changes
+      const hasChanges = formFields.some(field => field.name !== field.originalName)
       
-      if (!hasPdfLibFields) {
-        // If no PDF-lib fields, show a message and download the original PDF
-        alert('Note: Field name changes cannot be saved to this PDF due to format limitations. The original PDF will be downloaded.')
+      if (!hasChanges) {
+        alert('No field name changes detected. The original PDF will be downloaded.')
         const blob = new Blob([pdfBytes], { type: 'application/pdf' })
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
@@ -262,34 +261,55 @@ const usePdfStore = create((set, get) => ({
         return
       }
       
-      const pdfDoc = await PDFDocument.load(pdfBytes)
-      const form = pdfDoc.getForm()
-      
-      // Update field names in the PDF
-      formFields.forEach(field => {
-        if (field.name !== field.originalName && field.field) {
-          try {
-            const pdfField = form.getField(field.originalName)
-            pdfField.setName(field.name)
-          } catch (error) {
-            console.warn(`Could not rename field ${field.originalName}:`, error)
+      // Try to load with PDF-lib and create a new PDF with updated field names
+      try {
+        const pdfDoc = await PDFDocument.load(pdfBytes)
+        const form = pdfDoc.getForm()
+        
+        // Get existing fields
+        const existingFields = form.getFields()
+        
+        // Update field names if we can find them
+        let updatedCount = 0
+        formFields.forEach(field => {
+          if (field.name !== field.originalName) {
+            try {
+              // Try to find the field by original name
+              const pdfField = form.getField(field.originalName)
+              pdfField.setName(field.name)
+              updatedCount++
+            } catch (error) {
+              console.warn(`Could not rename field ${field.originalName}:`, error)
+            }
           }
-        }
-      })
-      
-      // Generate the updated PDF
-      const updatedPdfBytes = await pdfDoc.save()
-      
-      // Create download link
-      const blob = new Blob([updatedPdfBytes], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'updated-form.pdf'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+        })
+        
+        if (updatedCount > 0) {
+          // Generate the updated PDF
+          const updatedPdfBytes = await pdfDoc.save()
+          
+          // Create download link
+          const blob = new Blob([updatedPdfBytes], { type: 'application/pdf' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = 'updated-form.pdf'
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+          
+          alert(`Successfully updated ${updatedCount} field names in the PDF!`)
+                 } else {
+           // If we couldn't update any fields, create a new PDF with annotations
+           await get().createNewPdfWithAnnotations(pdfBytes, formFields)
+         }
+        
+             } catch (pdfLibError) {
+         console.warn('PDF-lib failed to modify existing fields, creating new PDF with annotations:', pdfLibError)
+         // Create a new PDF with the field names as annotations
+         await get().createNewPdfWithAnnotations(pdfBytes, formFields)
+       }
       
       set({ isLoading: false })
       
@@ -299,6 +319,79 @@ const usePdfStore = create((set, get) => ({
         error: 'Failed to save PDF. Please try again.',
         isLoading: false 
       })
+    }
+  },
+  
+  // Helper function to create a new PDF with field name annotations
+  createNewPdfWithAnnotations: async (originalPdfBytes, formFields) => {
+    try {
+      // Create a new PDF document
+      const pdfDoc = await PDFDocument.create()
+      
+      // Load the original PDF as a page
+      const originalPdf = await PDFDocument.load(originalPdfBytes)
+      const pages = await pdfDoc.copyPages(originalPdf, originalPdf.getPageIndices())
+      
+      // Add all pages to the new document
+      pages.forEach(page => pdfDoc.addPage(page))
+      
+      // Add text annotations for field names
+      const form = pdfDoc.getForm()
+      let annotationCount = 0
+      
+      formFields.forEach((field, index) => {
+        if (field.name !== field.originalName) {
+          try {
+            // Create a text field annotation with the new name
+            const textField = form.createTextField(`field_${index}_${field.name}`)
+            textField.setText(field.name)
+            textField.addToPage(pdfDoc.getPage(field.page - 1), {
+              x: field.bounds.x,
+              y: field.bounds.y,
+              width: field.bounds.width,
+              height: field.bounds.height
+            })
+            annotationCount++
+          } catch (error) {
+            console.warn(`Could not create annotation for field ${field.name}:`, error)
+          }
+        }
+      })
+      
+      if (annotationCount > 0) {
+        // Generate the new PDF
+        const newPdfBytes = await pdfDoc.save()
+        
+        // Create download link
+        const blob = new Blob([newPdfBytes], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'updated-form-with-annotations.pdf'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        
+        alert(`Created new PDF with ${annotationCount} field name annotations!`)
+      } else {
+        // Fallback to original PDF
+        const blob = new Blob([originalPdfBytes], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'original-form.pdf'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        
+        alert('Could not create field annotations. Original PDF downloaded.')
+      }
+      
+    } catch (error) {
+      console.error('Error creating new PDF with annotations:', error)
+      throw error
     }
   },
   

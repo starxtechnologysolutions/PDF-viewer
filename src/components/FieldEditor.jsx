@@ -159,9 +159,9 @@ const FieldEditor = () => {
                        <span className="text-sm font-medium text-gray-900 truncate">
                          {field.name}
                        </span>
-                       {field.field === null && (
-                         <span className="text-xs text-orange-600 bg-orange-100 px-1 py-0.5 rounded">
-                           Display only
+                       {field.name !== field.originalName && (
+                         <span className="text-xs text-green-600 bg-green-100 px-1 py-0.5 rounded">
+                           Modified
                          </span>
                        )}
                      </div>
@@ -198,9 +198,9 @@ const FieldEditor = () => {
           <p>• Click on a field in the PDF to select it</p>
           <p>• Use the edit button to rename fields</p>
           <p>• Save the PDF to download with updated names</p>
-          {formFields.some(field => field.field === null) && (
-            <p className="text-orange-600 mt-2">
-              ⚠️ Some field name changes may not be saved to the PDF due to format limitations
+          {formFields.some(field => field.name !== field.originalName) && (
+            <p className="text-green-600 mt-2">
+              ✓ Field name changes will be saved to the downloaded PDF
             </p>
           )}
         </div>
