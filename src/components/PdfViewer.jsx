@@ -20,10 +20,21 @@ const PdfViewer = () => {
   useEffect(() => {
     if (!pdfDocument) return
 
+    let isCancelled = false
+    let renderTask = null
+
     const renderPage = async () => {
       try {
+        // Cancel any existing render task
+        if (renderTask) {
+          renderTask.cancel()
+        }
+
         const page = await pdfDocument.getPage(currentPage)
         const canvas = canvasRef.current
+        
+        if (!canvas || isCancelled) return
+        
         const context = canvas.getContext('2d')
 
         const viewport = page.getViewport({ scale })
@@ -35,14 +46,28 @@ const PdfViewer = () => {
           viewport: viewport
         }
 
-        await page.render(renderContext).promise
-        setPageRendered(true)
+        renderTask = page.render(renderContext)
+        await renderTask.promise
+        
+        if (!isCancelled) {
+          setPageRendered(true)
+        }
       } catch (error) {
-        console.error('Error rendering PDF page:', error)
+        if (!isCancelled) {
+          console.error('Error rendering PDF page:', error)
+        }
       }
     }
 
     renderPage()
+
+    // Cleanup function
+    return () => {
+      isCancelled = true
+      if (renderTask) {
+        renderTask.cancel()
+      }
+    }
   }, [pdfDocument, currentPage, scale])
 
   const handleFieldClick = (fieldId) => {
