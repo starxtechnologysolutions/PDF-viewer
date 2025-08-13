@@ -291,7 +291,7 @@ const usePdfStore = create((set, get) => ({
     }
   },
   
-  // Helper function to modify existing PDF form fields
+  // Helper function to create field modification instructions and download original PDF
   createNewPdfWithAnnotations: async (originalPdfBytes, formFields) => {
     try {
       // Get the list of changed fields
@@ -313,150 +313,64 @@ const usePdfStore = create((set, get) => ({
         return
       }
 
-      // Try to modify the existing PDF directly
-      try {
-        console.log('Attempting to modify existing PDF form fields...')
-        
-        // Load the original PDF
-        console.log('Loading original PDF...')
-        const pdfDoc = await PDFDocument.load(originalPdfBytes)
-        console.log('Original PDF loaded successfully')
-        
-        // Get the form
-        const form = pdfDoc.getForm()
-        console.log('Form accessed successfully')
-        
-        // Get all form fields
-        const fields = form.getFields()
-        console.log(`Found ${fields.length} form fields in PDF`)
-        
-        let modifiedCount = 0
-        
-        // Try to modify existing fields
-        changedFields.forEach((changedField) => {
-          try {
-            console.log(`Looking for field: ${changedField.originalName}`)
-            
-            // Find the field by its original name
-            const existingField = fields.find(field => 
-              field.getName() === changedField.originalName ||
-              field.getName() === changedField.name
-            )
-            
-            if (existingField) {
-              console.log(`Found existing field: ${existingField.getName()}`)
-              
-              // Try to rename the field
-              try {
-                // For text fields, we can set the name
-                if (existingField.constructor.name === 'PDFTextField') {
-                  existingField.setName(changedField.name)
-                  console.log(`Renamed field from ${changedField.originalName} to ${changedField.name}`)
-                  modifiedCount++
-                } else {
-                  console.log(`Field ${existingField.getName()} is not a text field, cannot rename`)
-                }
-              } catch (renameError) {
-                console.warn(`Could not rename field ${changedField.originalName}:`, renameError)
-              }
-            } else {
-              console.log(`Field ${changedField.originalName} not found in PDF`)
-            }
-          } catch (fieldError) {
-            console.error(`Error processing field ${changedField.originalName}:`, fieldError)
-          }
-        })
-        
-        console.log(`Modified ${modifiedCount} fields successfully`)
-        
-        if (modifiedCount > 0) {
-          // Save the modified PDF
-          console.log('Saving modified PDF...')
-          const modifiedPdfBytes = await pdfDoc.save()
-          console.log('Modified PDF saved successfully')
-          
-          // Create download link
-          const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = 'updated-form-fields.pdf'
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          URL.revokeObjectURL(url)
-          
-          alert(`Successfully modified ${modifiedCount} field names in the PDF!`)
-          return
-        } else {
-          console.log('No fields were modified, trying alternative approach...')
-          
-          // Alternative approach: Create a new PDF with the original content and new field names
-          try {
-            console.log('Creating new PDF with modified field names...')
-            const newPdfDoc = await PDFDocument.create()
-            
-            // Copy pages from original
-            const pages = await newPdfDoc.copyPages(pdfDoc, pdfDoc.getPageIndices())
-            pages.forEach(page => newPdfDoc.addPage(page))
-            
-            // Add new form fields with the updated names
-            const newForm = newPdfDoc.getForm()
-            
-            changedFields.forEach((field, index) => {
-              try {
-                const textField = newForm.createTextField(field.name)
-                textField.addToPage(newPdfDoc.getPage(field.page - 1), {
-                  x: field.bounds.x,
-                  y: field.bounds.y,
-                  width: field.bounds.width,
-                  height: field.bounds.height
-                })
-                console.log(`Added new field: ${field.name}`)
-              } catch (error) {
-                console.warn(`Could not add field ${field.name}:`, error)
-              }
-            })
-            
-            const newPdfBytes = await newPdfDoc.save()
-            
-            // Create download link
-            const blob = new Blob([newPdfBytes], { type: 'application/pdf' })
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = 'updated-form-with-new-fields.pdf'
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(url)
-            
-            alert(`Created new PDF with updated field names!`)
-            return
-          } catch (altError) {
-            console.error('Alternative PDF creation also failed:', altError)
-          }
-        }
-      } catch (pdfError) {
-        console.error('PDF modification failed, falling back to summary:', pdfError)
-      }
+      // Create a comprehensive field modification guide
+      console.log('Creating field modification guide...')
       
-      // Fallback: Create a summary of changes
-      const summary = changedFields.map(field => 
-        `• ${field.originalName} → ${field.name} (${field.type})`
-      ).join('\n')
+      // Generate detailed instructions
+      const instructions = changedFields.map((field, index) => {
+        return `${index + 1}. Find field "${field.originalName}" (${field.type}) on page ${field.page}
+   - Location: X=${field.bounds.x}, Y=${field.bounds.y}, Width=${field.bounds.width}, Height=${field.bounds.height}
+   - Change name to: "${field.name}"`
+      }).join('\n\n')
       
-      // Create a text file with the changes summary
-      const summaryText = `Field Name Changes Summary\n\n${summary}\n\nNote: The original PDF has been downloaded. Please manually update the field names in your PDF editor using this summary.`
-      const summaryBlob = new Blob([summaryText], { type: 'text/plain' })
-      const summaryUrl = URL.createObjectURL(summaryBlob)
-      const summaryLink = document.createElement('a')
-      summaryLink.href = summaryUrl
-      summaryLink.download = 'field-changes-summary.txt'
-      document.body.appendChild(summaryLink)
-      summaryLink.click()
-      document.body.removeChild(summaryLink)
-      URL.revokeObjectURL(summaryUrl)
+      // Create a comprehensive guide
+      const guideText = `PDF Field Name Modification Guide
+=====================================
+
+Your PDF contains ${changedFields.length} field(s) that need to be renamed.
+
+INSTRUCTIONS:
+${instructions}
+
+RECOMMENDED TOOLS:
+• Adobe Acrobat Pro DC
+• PDF-XChange Editor
+• Foxit PDF Editor
+• LibreOffice Draw
+• Inkscape (free)
+
+STEP-BY-STEP PROCESS:
+1. Open the original PDF in your preferred PDF editor
+2. Enable form editing mode
+3. For each field listed above:
+   - Right-click on the field
+   - Select "Properties" or "Field Properties"
+   - Change the field name from the old name to the new name
+   - Save the changes
+4. Save the modified PDF
+
+FIELD DETAILS:
+${changedFields.map(field => 
+  `• ${field.originalName} → ${field.name}
+  - Type: ${field.type}
+  - Page: ${field.page}
+  - Position: (${field.bounds.x}, ${field.bounds.y})
+  - Size: ${field.bounds.width} × ${field.bounds.height}`
+).join('\n')}
+
+Note: The original PDF has been downloaded as "original-form.pdf".
+Use this guide to manually update the field names in your PDF editor.`
+      
+      // Create the guide file
+      const guideBlob = new Blob([guideText], { type: 'text/plain' })
+      const guideUrl = URL.createObjectURL(guideBlob)
+      const guideLink = document.createElement('a')
+      guideLink.href = guideUrl
+      guideLink.download = 'field-modification-guide.txt'
+      document.body.appendChild(guideLink)
+      guideLink.click()
+      document.body.removeChild(guideLink)
+      URL.revokeObjectURL(guideUrl)
       
       // Download the original PDF
       const blob = new Blob([originalPdfBytes], { type: 'application/pdf' })
@@ -469,11 +383,11 @@ const usePdfStore = create((set, get) => ({
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
       
-      alert(`Downloaded original PDF and field changes summary (${changedFields.length} changes). Please use the summary to manually update your PDF.`)
+      alert(`Downloaded original PDF and detailed modification guide (${changedFields.length} changes).\n\nPlease use the guide to manually update field names in your PDF editor.`)
       
     } catch (error) {
-      console.error('Error creating summary:', error)
-      // Fallback to original PDF if summary creation fails
+      console.error('Error creating guide:', error)
+      // Fallback to original PDF if guide creation fails
       const blob = new Blob([originalPdfBytes], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -484,7 +398,7 @@ const usePdfStore = create((set, get) => ({
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
       
-      alert('Failed to create summary. Original PDF downloaded instead.')
+      alert('Failed to create guide. Original PDF downloaded instead.')
     }
   },
   
