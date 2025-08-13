@@ -149,6 +149,7 @@ const usePdfStore = create((set, get) => ({
         }))
       }
       
+      console.log('Form fields loaded:', formFields)
       set({
         pdfDocument,
         pdfBytes,
@@ -220,6 +221,7 @@ const usePdfStore = create((set, get) => ({
   
   updateFieldName: (fieldId, newName) => {
     const { formFields } = get()
+    console.log('Updating field name:', fieldId, 'to:', newName)
     const updatedFields = formFields.map(field => 
       field.id === fieldId 
         ? { ...field, name: newName }
@@ -244,7 +246,8 @@ const usePdfStore = create((set, get) => ({
       const hasPdfLibFields = formFields.some(field => field.field !== null)
       
       if (!hasPdfLibFields) {
-        // If no PDF-lib fields, just download the original PDF
+        // If no PDF-lib fields, show a message and download the original PDF
+        alert('Note: Field name changes cannot be saved to this PDF due to format limitations. The original PDF will be downloaded.')
         const blob = new Blob([pdfBytes], { type: 'application/pdf' })
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')

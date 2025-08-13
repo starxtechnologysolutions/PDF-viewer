@@ -6,6 +6,7 @@ const FieldEditor = () => {
   const { formFields, selectedField, updateFieldName } = usePdfStore()
   const [editingField, setEditingField] = useState(null)
   const [editValue, setEditValue] = useState('')
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const handleEditClick = (field) => {
     setEditingField(field.id)
@@ -17,6 +18,8 @@ const FieldEditor = () => {
       updateFieldName(editingField, editValue.trim())
       setEditingField(null)
       setEditValue('')
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 2000)
     }
   }
 
@@ -152,16 +155,22 @@ const FieldEditor = () => {
                    </div>
                  ) : (
                    <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium text-gray-900 truncate">
-                       {field.name}
-                     </span>
+                     <div className="flex items-center space-x-2">
+                       <span className="text-sm font-medium text-gray-900 truncate">
+                         {field.name}
+                       </span>
+                       {field.field === null && (
+                         <span className="text-xs text-orange-600 bg-orange-100 px-1 py-0.5 rounded">
+                           Display only
+                         </span>
+                       )}
+                     </div>
                      <button
                        onClick={() => handleEditClick(field)}
                        className="p-1 text-gray-400 hover:text-gray-600 ml-2"
                        title="Edit field name"
-                       disabled={field.field === null}
                      >
-                       <Edit3 className={`h-4 w-4 ${field.field === null ? 'opacity-30 cursor-not-allowed' : ''}`} />
+                       <Edit3 className="h-4 w-4" />
                      </button>
                    </div>
                  )}
@@ -180,13 +189,18 @@ const FieldEditor = () => {
 
       {/* Footer */}
       <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+        {showSuccess && (
+          <div className="mb-3 p-2 bg-green-100 border border-green-400 text-green-700 rounded text-xs">
+            ✓ Field name updated successfully!
+          </div>
+        )}
         <div className="text-xs text-gray-500">
           <p>• Click on a field in the PDF to select it</p>
-          <p>• Use the edit button to rename fields (if available)</p>
+          <p>• Use the edit button to rename fields</p>
           <p>• Save the PDF to download with updated names</p>
           {formFields.some(field => field.field === null) && (
             <p className="text-orange-600 mt-2">
-              ⚠️ Some fields may not be editable due to PDF format limitations
+              ⚠️ Some field name changes may not be saved to the PDF due to format limitations
             </p>
           )}
         </div>
